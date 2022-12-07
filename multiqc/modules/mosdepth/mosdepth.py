@@ -225,36 +225,50 @@ class MultiqcModule(BaseMultiqcModule):
         # Parse coverage distributions
         for scope in ("region", "global"):
             for f in self.find_log_files("mosdepth/" + scope + "_dist"):
+
                 s_name = self.clean_s_name(f["fn"], f)
                 if s_name in cumcov_dist_data:  # both region and global might exist, prioritizing region
                     continue
 
+                x = None
                 for line in f["f"].split("\n"):
                     if "\t" not in line:
                         continue
+
                     contig, cutoff_reads, bases_fraction = line.split("\t")
+
                     if float(bases_fraction) == 0:
                         continue
 
                     # Parse cumulative coverage and calculate absolute coverage (global)
                     if contig == "total":
-                        cumcov = 100.0 * float(bases_fraction)
-                        x = int(cutoff_reads)
-                        cumcov_dist_data[s_name][x] = cumcov
-                        # converting cumulative coverage into absoulte coverage:
-                        """
-                        *example*              x:  cumcov:  abscov:
-                        3x                     3x  0      =               0
-                        2x     -               2x  0.10   = 0.10 - 0    = 0.10
-                        1x     --------        1x  0.80   = 0.80 - 0.10 = 0.70
-                        genome ..........      0x  1.00   = 1.00 - 0.80 = 0.20
-                        """
-                        if x + 1 not in cumcov_dist_data[s_name]:
-                            cov_dist_data[s_name][x] = cumcov
-                        else:
-                            cov_dist_data[s_name][x] = cumcov - cumcov_dist_data[s_name][x + 1]
-                        if cumcov > 1:  # require >1% to prevent long flat tail
-                            xmax = max(xmax, x)
+                        n_reads = int(cutoff_reads)
+
+                        # Set x to first (maximum) value
+                        if x is None:
+                            x = n_reads
+
+                        while x >= n_reads:
+
+                            cumcov = 100.0 * float(bases_fraction)
+                            cumcov_dist_data[s_name][x] = cumcov
+                            # converting cumulative coverage into absoulte coverage:
+                            """
+                            *example*              x:  cumcov:  abscov:
+                            3x                     3x  0      =               0
+                            2x     -               2x  0.10   = 0.10 - 0    = 0.10
+                            1x     --------        1x  0.80   = 0.80 - 0.10 = 0.70
+                            genome ..........      0x  1.00   = 1.00 - 0.80 = 0.20
+                            """
+                            if x + 1 not in cumcov_dist_data[s_name]:
+                                cov_dist_data[s_name][x] = cumcov
+                            else:
+                                cov_dist_data[s_name][x] = cumcov - cumcov_dist_data[s_name][x + 1]
+                            if cumcov > 1:  # require >1% to prevent long flat tail
+                                xmax = max(xmax, x)
+
+                            # Iterate down by 1 until matching n_reads
+                            x -= 1
 
                     # Calculate per-contig coverage
                     else:
